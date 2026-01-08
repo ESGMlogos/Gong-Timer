@@ -65,6 +65,7 @@ class AudioService {
 
   /**
    * MANTRA (OHM) - SOURCE-FILTER THEORY IMPLEMENTATION
+   * Gain Reduced to prevent clipping
    */
   private playMantraSound(ctx: AudioContext, t: number, outputNode: AudioNode) {
     const duration = 14.0; 
@@ -84,13 +85,13 @@ class AudioService {
     vocalFry.type = 'square'; 
     vocalFry.frequency.value = f0 / 2; 
     const fryGain = ctx.createGain();
-    fryGain.gain.value = 0.15; 
+    fryGain.gain.value = 0.08; // Reduced from 0.15
 
     const breath = ctx.createBufferSource();
     breath.buffer = this.getPinkNoiseBuffer(ctx);
     breath.loop = true;
     const breathGain = ctx.createGain();
-    breathGain.gain.value = 0.04;
+    breathGain.gain.value = 0.02; // Reduced from 0.04
 
     const jitter = ctx.createOscillator();
     jitter.frequency.value = 5.0; 
@@ -120,7 +121,7 @@ class AudioService {
     f1.frequency.setValueAtTime(400, t + attack + holdO);
     f1.frequency.exponentialRampToValueAtTime(250, t + attack + holdO + morphTime);
     const f1Gain = ctx.createGain();
-    f1Gain.gain.value = 1.0;
+    f1Gain.gain.value = 0.5; // Reduced from 1.0
 
     const f2 = ctx.createBiquadFilter();
     f2.type = 'bandpass';
@@ -130,16 +131,16 @@ class AudioService {
     f2.frequency.exponentialRampToValueAtTime(300, t + attack + holdO + morphTime);
     
     const f2Gain = ctx.createGain();
-    f2Gain.gain.setValueAtTime(0.8, t);
-    f2Gain.gain.setValueAtTime(0.8, t + attack + holdO);
-    f2Gain.gain.linearRampToValueAtTime(0.1, t + attack + holdO + morphTime); 
+    f2Gain.gain.setValueAtTime(0.4, t); // Reduced from 0.8
+    f2Gain.gain.setValueAtTime(0.4, t + attack + holdO);
+    f2Gain.gain.linearRampToValueAtTime(0.05, t + attack + holdO + morphTime); 
 
     const f3 = ctx.createBiquadFilter();
     f3.type = 'bandpass';
     f3.frequency.value = 2800;
     f3.Q.value = 2.0;
     const f3Gain = ctx.createGain();
-    f3Gain.gain.setValueAtTime(0.15, t);
+    f3Gain.gain.setValueAtTime(0.08, t); // Reduced from 0.15
     f3Gain.gain.linearRampToValueAtTime(0, t + attack + holdO + morphTime); 
 
     const nasalOcclusion = ctx.createBiquadFilter();
@@ -162,9 +163,9 @@ class AudioService {
 
     const masterEnv = ctx.createGain();
     masterEnv.gain.setValueAtTime(0, t);
-    masterEnv.gain.linearRampToValueAtTime(0.9, t + attack);
-    masterEnv.gain.setValueAtTime(0.9, t + attack + holdO);
-    masterEnv.gain.linearRampToValueAtTime(0.7, t + attack + holdO + morphTime);
+    masterEnv.gain.linearRampToValueAtTime(0.5, t + attack); // Reduced from 0.9
+    masterEnv.gain.setValueAtTime(0.5, t + attack + holdO);
+    masterEnv.gain.linearRampToValueAtTime(0.4, t + attack + holdO + morphTime);
     masterEnv.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
     nasalOcclusion.connect(masterEnv);
@@ -183,6 +184,7 @@ class AudioService {
 
   /**
    * BONSHO (Buddhist Bell) - REALISTIC SIMULATION
+   * Gain Reduced to prevent clipping
    */
   private playBonshoSound(ctx: AudioContext, t: number, outputNode: AudioNode) {
     const f0 = 54.0; 
@@ -198,7 +200,7 @@ class AudioService {
     strikeFilter.Q.value = 1.0;
     const strikeEnv = ctx.createGain();
     strikeEnv.gain.setValueAtTime(0, t);
-    strikeEnv.gain.linearRampToValueAtTime(1.0, t + 0.005);
+    strikeEnv.gain.linearRampToValueAtTime(0.4, t + 0.005); // Reduced from 1.0
     strikeEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
     strikeNoise.connect(strikeFilter);
     strikeFilter.connect(strikeEnv);
@@ -215,7 +217,7 @@ class AudioService {
     metalFilter.Q.value = 2.0;
     const metalEnv = ctx.createGain();
     metalEnv.gain.setValueAtTime(0, t);
-    metalEnv.gain.linearRampToValueAtTime(0.3, t + 0.01);
+    metalEnv.gain.linearRampToValueAtTime(0.15, t + 0.01); // Reduced from 0.3
     metalEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
     metalNoise.connect(metalFilter);
     metalFilter.connect(metalEnv);
@@ -236,6 +238,7 @@ class AudioService {
 
     modes.forEach((mode, i) => {
         const freq = f0 * mode.r;
+        const gainScale = 0.5; // Global scaler for modes
 
         if (mode.spread) {
             const leftOsc = ctx.createOscillator();
@@ -253,7 +256,7 @@ class AudioService {
             const attackTime = 0.2; 
             [leftGain, rightGain].forEach(g => {
                 g.gain.setValueAtTime(0, t);
-                g.gain.linearRampToValueAtTime(mode.a * 0.6, t + attackTime);
+                g.gain.linearRampToValueAtTime((mode.a * 0.6) * gainScale, t + attackTime);
                 g.gain.exponentialRampToValueAtTime(0.001, t + mode.d);
             });
 
@@ -269,7 +272,7 @@ class AudioService {
             const gain = ctx.createGain();
             gain.gain.setValueAtTime(0, t);
             const attack = 0.05 + (1 / mode.r) * 0.1; 
-            gain.gain.linearRampToValueAtTime(mode.a, t + attack);
+            gain.gain.linearRampToValueAtTime(mode.a * gainScale, t + attack);
             gain.gain.exponentialRampToValueAtTime(0.001, t + mode.d);
             osc.connect(gain);
             gain.connect(outputNode);
@@ -281,14 +284,12 @@ class AudioService {
 
   /**
    * DORA (Traditional Gong) - RE-ENGINEERED FROM SCRATCH
-   * Follows strict Step-by-Step guide for acoustics.
-   * f0 = 100Hz
+   * Heavy Gain Reduction to prevent clipping
    */
   private playDoraSound(ctx: AudioContext, t: number, outputNode: AudioNode) {
-    const f0 = 100; // Hz - Step 1.1
+    const f0 = 100; 
 
     // --- STEP 4.3: CHARACTERISTIC EQ ---
-    // bands = [(80, -3), (2000, 6, Q1.5), (5000, -2, Q3.0)]
     const eqLow = ctx.createBiquadFilter();
     eqLow.type = 'lowshelf';
     eqLow.frequency.value = 80;
@@ -298,7 +299,7 @@ class AudioService {
     eqMid.type = 'peaking';
     eqMid.frequency.value = 2000;
     eqMid.Q.value = 1.5;
-    eqMid.gain.value = 6;
+    eqMid.gain.value = 3; // Reduced from 6dB
 
     const eqHigh = ctx.createBiquadFilter();
     eqHigh.type = 'peaking';
@@ -306,41 +307,31 @@ class AudioService {
     eqHigh.Q.value = 3.0;
     eqHigh.gain.value = -2;
 
-    // Chain EQ: Source -> Low -> Mid -> High -> Output
     eqLow.connect(eqMid);
     eqMid.connect(eqHigh);
     eqHigh.connect(outputNode);
     
-    // All components mix into the start of the EQ chain
     const mixBus = eqLow; 
 
-    // --- STEP 3.2: NATURAL VIBRATO (LFO) ---
-    // Frequency: 1.5 Hz
-    // Depth: 0.003 (0.3% of f0)
-    // Applied via Detune (approx 5-15 cents to match perception)
     const lfo = ctx.createOscillator();
     lfo.frequency.value = 1.5; 
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 15; // Cents
+    lfoGain.gain.value = 15; 
     lfo.connect(lfoGain);
     lfo.start(t);
     lfo.stop(t + 15);
 
-    // --- STEP 1.1 & 4.1: FUNDAMENTALS & BEATINGS ---
-    // Osc1: f0 * 1.001 (0.7 amp)
-    // Osc2: f0 * 0.999 (0.7 amp - approximates the beating)
+    // --- FUNDAMENTALS & BEATINGS ---
     const beatings = [f0 * 1.001, f0 * 0.999];
     
     beatings.forEach(freq => {
         const osc = ctx.createOscillator();
         osc.frequency.value = freq;
-        lfoGain.connect(osc.detune); // Apply Vibrato
+        lfoGain.connect(osc.detune); 
 
         const env = ctx.createGain();
         env.gain.setValueAtTime(0, t);
-        // Attack 0.001s implied, but we use 0.005 for click prevention
-        env.gain.linearRampToValueAtTime(0.7, t + 0.005); 
-        // Decay 8.0s
+        env.gain.linearRampToValueAtTime(0.25, t + 0.005); // Reduced from 0.7
         env.gain.exponentialRampToValueAtTime(0.001, t + 8.0);
 
         osc.connect(env);
@@ -349,7 +340,7 @@ class AudioService {
         osc.stop(t + 8.0);
     });
 
-    // --- STEP 1.2 & 3.1: INHARMONIC PARTIALS ---
+    // --- INHARMONIC PARTIALS ---
     const partialsData = [
         { r: 2.76, decay: 6.5, amp: 0.5 },
         { r: 4.32, decay: 5.0, amp: 0.8 },
@@ -359,6 +350,8 @@ class AudioService {
         { r: 10.12, decay: 0.5, amp: 0.2 }
     ];
 
+    const partialsScale = 0.3; // Global scale for partials
+
     partialsData.forEach(p => {
         const osc = ctx.createOscillator();
         osc.frequency.value = f0 * p.r;
@@ -366,9 +359,7 @@ class AudioService {
 
         const env = ctx.createGain();
         env.gain.setValueAtTime(0, t);
-        // Attack
-        env.gain.linearRampToValueAtTime(p.amp, t + 0.01); 
-        // Decay per partial
+        env.gain.linearRampToValueAtTime(p.amp * partialsScale, t + 0.01); 
         env.gain.exponentialRampToValueAtTime(0.001, t + p.decay);
 
         osc.connect(env);
@@ -377,10 +368,7 @@ class AudioService {
         osc.stop(t + p.decay);
     });
 
-    // --- STEP 2.1: METALLIC ATTACK (Strike) ---
-    // Source: White/Pink Noise
-    // Filter: Bandpass 2000Hz, Q=2.0
-    // Env: Attack 0.001, Decay 0.05
+    // --- METALLIC ATTACK ---
     const noise = ctx.createBufferSource();
     noise.buffer = this.getPinkNoiseBuffer(ctx);
     
@@ -391,8 +379,7 @@ class AudioService {
 
     const attackEnv = ctx.createGain();
     attackEnv.gain.setValueAtTime(0, t);
-    // 1.2 Amp (120%)
-    attackEnv.gain.linearRampToValueAtTime(1.2, t + 0.001);
+    attackEnv.gain.linearRampToValueAtTime(0.4, t + 0.001); // Reduced from 1.2
     attackEnv.gain.linearRampToValueAtTime(0, t + 0.051);
 
     noise.connect(attackFilter);
@@ -401,8 +388,7 @@ class AudioService {
     noise.start(t);
     noise.stop(t + 0.1);
 
-    // --- STEP 2.2: BLOOM PHASE ---
-    // Partials that swell in after impact
+    // --- BLOOM PHASE ---
     const bloomData = [
         { r: 1.58 },
         { r: 3.21 }
@@ -415,9 +401,7 @@ class AudioService {
 
         const env = ctx.createGain();
         env.gain.setValueAtTime(0, t);
-        // Linear Ramp 0 -> 0.6 (60%) in 0.3s
-        env.gain.linearRampToValueAtTime(0.6, t + 0.3);
-        // Then standard decay
+        env.gain.linearRampToValueAtTime(0.2, t + 0.3); // Reduced from 0.6
         env.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
 
         osc.connect(env);
@@ -429,23 +413,16 @@ class AudioService {
 
   /**
    * TIBETAN SINGING BOWL (Cuenco Tibetano)
-   * Implements Steps 1-5 of the Acoustic Guide.
-   * Key Features:
-   * - f0 = 262Hz (Middle C)
-   * - Sacred Ratios: 1.5 (Fifth), 2.0 (Octave), 2.5 (5th over Oct), 3.0 (Twelfth)
-   * - Bloom Attack: Sound swells after impact
-   * - Stereo Rotation: Simulates the "Singing" circular movement
+   * Gain Reduced
    */
   private playTibetanBowlSound(ctx: AudioContext, t: number, outputNode: AudioNode) {
-    const f0 = 262.0; // Step 1.1: Fundamental (Medium Bowl)
+    const f0 = 262.0; 
 
-    // --- STEP 5.1: ROTATION EFFECT (Stereo Panning) ---
-    // Creates the circular acoustic field
     const panner = ctx.createStereoPanner();
     const rotLfo = ctx.createOscillator();
-    rotLfo.frequency.value = 0.2; // 0.2 Hz Rotation speed
+    rotLfo.frequency.value = 0.2; 
     const rotGain = ctx.createGain();
-    rotGain.gain.value = 0.5; // Depth of rotation
+    rotGain.gain.value = 0.5; 
     
     rotLfo.connect(rotGain);
     rotGain.connect(panner.pan);
@@ -455,19 +432,18 @@ class AudioService {
     panner.connect(outputNode);
     const mixBus = panner;
 
-    // --- STEP 3.1: MALLET ATTACK (Soft Impact) ---
-    // Filtered noise for the initial "thud" of the mallet
+    // --- MALLET ATTACK ---
     const strikeNoise = ctx.createBufferSource();
     strikeNoise.buffer = this.getPinkNoiseBuffer(ctx);
     
     const strikeFilter = ctx.createBiquadFilter();
     strikeFilter.type = 'lowpass';
-    strikeFilter.frequency.value = 800; // Softer than metal gong
+    strikeFilter.frequency.value = 800; 
     strikeFilter.Q.value = 1.0;
 
     const strikeEnv = ctx.createGain();
     strikeEnv.gain.setValueAtTime(0, t);
-    strikeEnv.gain.linearRampToValueAtTime(0.6, t + 0.01);
+    strikeEnv.gain.linearRampToValueAtTime(0.25, t + 0.01); // Reduced from 0.6
     strikeEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
 
     strikeNoise.connect(strikeFilter);
@@ -476,28 +452,27 @@ class AudioService {
     strikeNoise.start(t);
     strikeNoise.stop(t + 0.5);
 
-    // --- STEP 1.2 & 2.2: HARMONIC MODES ---
-    // Based on guide: [Fund, 5th, Octave, 5th+Oct, 12th, Double Oct]
+    // --- HARMONIC MODES ---
     const modes = [
-        { r: 1.0, amp: 1.0, decay: 25.0 }, // Fundamental (Do4)
-        { r: 1.5, amp: 0.7, decay: 20.0 }, // Fifth (Sol4)
-        { r: 2.0, amp: 0.5, decay: 15.0 }, // Octave (Do5)
-        { r: 2.5, amp: 0.3, decay: 12.0 }, // Fifth over Octave (Mi5)
-        { r: 3.0, amp: 0.2, decay: 10.0 }, // Twelfth (Sol5)
-        { r: 4.0, amp: 0.1, decay: 8.0 }   // Double Octave (Do6)
+        { r: 1.0, amp: 1.0, decay: 25.0 }, 
+        { r: 1.5, amp: 0.7, decay: 20.0 }, 
+        { r: 2.0, amp: 0.5, decay: 15.0 }, 
+        { r: 2.5, amp: 0.3, decay: 12.0 }, 
+        { r: 3.0, amp: 0.2, decay: 10.0 }, 
+        { r: 4.0, amp: 0.1, decay: 8.0 }   
     ];
+
+    const modeScale = 0.35; // Global scaler
 
     modes.forEach(mode => {
         const osc = ctx.createOscillator();
-        // Slight random detune for naturalness (Step 4.2)
         const detune = 1.0 + (Math.random() - 0.5) * 0.002; 
         osc.frequency.value = f0 * mode.r * detune;
 
-        // Subtle Vibrato (Singing Effect - Step 7.3)
         const vibrato = ctx.createOscillator();
-        vibrato.frequency.value = 3.5; // 3.5Hz wobble
+        vibrato.frequency.value = 3.5; 
         const vibGain = ctx.createGain();
-        vibGain.gain.value = 2; // Subtle pitch shift
+        vibGain.gain.value = 2; 
         vibrato.connect(vibGain);
         vibGain.connect(osc.frequency);
         vibrato.start(t);
@@ -506,12 +481,9 @@ class AudioService {
         const env = ctx.createGain();
         env.gain.setValueAtTime(0, t);
 
-        // --- STEP 3.2: ENVELOPE (Bloom) ---
-        // Attack is slower than a gong, it "blooms"
-        // Higher frequencies bloom slightly faster
         const attackTime = 0.05 + (1/mode.r) * 0.1; 
         
-        env.gain.linearRampToValueAtTime(mode.amp, t + attackTime);
+        env.gain.linearRampToValueAtTime(mode.amp * modeScale, t + attackTime);
         env.gain.exponentialRampToValueAtTime(0.001, t + mode.decay);
 
         osc.connect(env);
@@ -525,19 +497,28 @@ class AudioService {
     const ctx = this.getContext();
     const t = ctx.currentTime;
 
+    // --- OUTPUT LIMITER ---
+    // Protects speakers from clipping by soft-clipping high peaks
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -1; // Start compressing at -1dB
+    limiter.knee.value = 10;      // Soft knee
+    limiter.ratio.value = 12;     // High ratio acting like a limiter
+    limiter.attack.value = 0.005; 
+    limiter.release.value = 0.25;
+    limiter.connect(ctx.destination);
+
     // --- GLOBAL BUS ---
     const masterBus = ctx.createGain();
-    masterBus.connect(ctx.destination);
+    masterBus.connect(limiter);
     
     // --- REVERB (Sacred Space) ---
     const convolver = ctx.createConvolver();
     convolver.buffer = this.getReverbBuffer(ctx);
     const reverbMix = ctx.createGain();
-    // Bonsho, Dora, and Tibetan need more reverb to simulate the temple
     reverbMix.gain.value = (type === GongType.BONSHO || type === GongType.DORA || type === GongType.TIBETAN) ? 0.65 : 0.5;
     masterBus.connect(convolver);
     convolver.connect(reverbMix);
-    reverbMix.connect(ctx.destination);
+    reverbMix.connect(limiter);
 
     // --- SOUND GENERATION STRATEGIES ---
 
@@ -564,7 +545,7 @@ class AudioService {
     // Common Envelope for Standard Gongs
     const envelope = ctx.createGain();
     envelope.gain.setValueAtTime(0, t);
-    envelope.gain.linearRampToValueAtTime(0.8, t + 0.05); // Fast attack
+    envelope.gain.linearRampToValueAtTime(0.4, t + 0.05); // Reduced from 0.8
 
     // Logic for DEEP, BRIGHT, ETHEREAL
     let fundamentals: number[] = [];
@@ -572,23 +553,18 @@ class AudioService {
 
     switch (type) {
       case GongType.DEEP:
-        // Grounding: 54Hz (Root) + 136.1Hz (Earth Year/Om)
         fundamentals = [54, 136.1]; 
         decayTime = 10;
         envelope.gain.exponentialRampToValueAtTime(0.001, t + decayTime);
         break;
         
       case GongType.BRIGHT:
-        // Cognition/Focus: 432Hz (Clarity) + 528Hz (Transformation/DNA)
         fundamentals = [432, 528]; 
         decayTime = 3;
-        // Sharper decay for alertness
         envelope.gain.exponentialRampToValueAtTime(0.001, t + decayTime);
         break;
         
       case GongType.ETHEREAL:
-        // Intuition: 432Hz harmonics + Binaural Detuning for Gamma (Insight)
-        // 216Hz base
         fundamentals = [216];
         decayTime = 6;
         envelope.gain.exponentialRampToValueAtTime(0.001, t + decayTime);
@@ -599,7 +575,6 @@ class AudioService {
 
     // Synthesis Loop
     fundamentals.forEach(fund => {
-      // Create 3 harmonics for each fundamental using Phi decay
       [1, 2, 3, 5].forEach(h => {
         const osc = ctx.createOscillator();
         const oscGain = ctx.createGain();
@@ -607,17 +582,16 @@ class AudioService {
         const freq = fund * h;
         osc.frequency.value = freq;
         
-        // Ethereal Special: Add Binaural Beat for Gamma (40Hz)
         if (type === GongType.ETHEREAL && h === 1) {
-           // Left Ear (Via stereo panning simulation)
+           // Left Ear
            const oscL = ctx.createOscillator();
            oscL.frequency.value = freq;
            const panL = ctx.createStereoPanner();
            panL.pan.value = -0.5;
            
-           // Right Ear (Freq + 40Hz)
+           // Right Ear
            const oscR = ctx.createOscillator();
-           oscR.frequency.value = freq + 40; // 40Hz Gamma difference
+           oscR.frequency.value = freq + 40; 
            const panR = ctx.createStereoPanner();
            panR.pan.value = 0.5;
 
@@ -626,7 +600,6 @@ class AudioService {
            oscL.start(t); oscR.start(t);
            oscL.stop(t + decayTime); oscR.stop(t + decayTime);
            
-           // Don't use the main osc for this iteration
         } else {
            osc.type = h === 1 ? 'sine' : 'triangle';
            osc.connect(oscGain);
@@ -634,12 +607,9 @@ class AudioService {
            osc.stop(t + decayTime);
         }
 
-        // Apply Golden Ratio Decay: A = 1 / n^1.618
-        // We modify slightly to keep fundamental loud
         const amplitude = 1 / Math.pow(h, 1.618);
         oscGain.gain.value = amplitude;
 
-        // Connect to main envelope
         oscGain.connect(envelope);
       });
     });
