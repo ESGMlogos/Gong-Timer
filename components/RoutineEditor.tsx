@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Routine, TimerStep, GongType } from '../types';
 import { generateRoutine } from '../services/geminiService';
-import { Plus, Trash, Wand2, ArrowLeft, Save, Loader2, Play } from 'lucide-react';
+import { Plus, Trash2, Wand2, ArrowLeft, Save, Loader2, Play } from 'lucide-react';
 import { audioService } from '../services/audioService';
 
 interface RoutineEditorProps {
@@ -129,7 +129,7 @@ const RoutineEditor: React.FC<RoutineEditorProps> = ({ initialRoutine, onSave, o
                     placeholder="Step Name"
                   />
                   <button onClick={() => removeStep(index)} className="text-stone-300 hover:text-red-400 transition-colors">
-                    <Trash size={18} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
                 
