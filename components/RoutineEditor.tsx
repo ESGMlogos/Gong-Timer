@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Routine, TimerStep, GongType } from '../types';
-import { generateRoutine } from '../services/geminiService';
-import { Plus, Trash2, Wand2, ArrowLeft, Save, Loader2, Play } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Save, Play } from 'lucide-react';
 import { audioService } from '../services/audioService';
 
 interface RoutineEditorProps {
@@ -15,9 +14,6 @@ const RoutineEditor: React.FC<RoutineEditorProps> = ({ initialRoutine, onSave, o
   const [steps, setSteps] = useState<TimerStep[]>(initialRoutine?.steps || [
     { id: '1', name: 'Preparation', duration: 10, gongType: GongType.DEEP }
   ]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [showAiModal, setShowAiModal] = useState(false);
 
   const addStep = () => {
     setSteps([
@@ -63,27 +59,6 @@ const RoutineEditor: React.FC<RoutineEditorProps> = ({ initialRoutine, onSave, o
     onSave(routine);
   };
 
-  const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-    try {
-      const generated = await generateRoutine(aiPrompt);
-      setName(generated.name);
-      // Map AI response to our internal structure with IDs
-      const mappedSteps = generated.steps.map((s, idx) => ({
-        ...s,
-        id: `${Date.now()}-${idx}`,
-      }));
-      setSteps(mappedSteps);
-      setShowAiModal(false);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to generate routine. Please check your API key or try again.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 p-6 pb-24">
       <div className="max-w-2xl mx-auto">
@@ -95,10 +70,7 @@ const RoutineEditor: React.FC<RoutineEditorProps> = ({ initialRoutine, onSave, o
           <h2 className="text-2xl font-serif text-stone-800">
             {initialRoutine ? 'Edit Routine' : 'Create Routine'}
           </h2>
-          <button onClick={() => setShowAiModal(true)} className="text-purple-700 hover:text-purple-900 flex gap-1 items-center text-sm font-semibold">
-            <Wand2 size={18} />
-            AI Draft
-          </button>
+          <div className="w-6"></div> {/* Spacer for alignment */}
         </div>
 
         {/* Form */}
@@ -187,40 +159,6 @@ const RoutineEditor: React.FC<RoutineEditorProps> = ({ initialRoutine, onSave, o
           </button>
         </div>
       </div>
-
-      {/* AI Modal */}
-      {showAiModal && (
-        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md p-6 rounded-2xl shadow-2xl">
-            <h3 className="text-xl font-serif text-stone-800 mb-2">AI Routine Draft</h3>
-            <p className="text-stone-500 text-sm mb-4">What kind of session would you like? (e.g., "5 minute focus break", "Deep sleep preparation")</p>
-            
-            <textarea 
-              className="w-full bg-stone-50 rounded-lg p-3 text-stone-800 h-24 mb-4 resize-none border focus:border-stone-400 outline-none"
-              placeholder="Describe your desired routine..."
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-            />
-            
-            <div className="flex gap-3 justify-end">
-              <button 
-                onClick={() => setShowAiModal(false)}
-                className="px-4 py-2 text-stone-500 hover:bg-stone-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleAiGenerate}
-                disabled={isGenerating || !aiPrompt}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
-                Generate
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
