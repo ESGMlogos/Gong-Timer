@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
-import { Routine, TimerStep } from '../types';
+import { Routine } from '../types';
 import { audioService } from '../services/audioService';
 import { Play, Pause, X, SkipForward, Check } from 'lucide-react';
 
@@ -15,6 +15,10 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   
+  // Ref to track the expected end time of the current step
+  const endTimeRef = useRef<number>(0);
+  const pauseTimeRef = useRef<number>(0);
+
   const svgRef = useRef<SVGSVGElement>(null);
   
   const currentStep = routine.steps[currentStepIndex];
@@ -24,36 +28,87 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
   useEffect(() => {
     // Play the starting gong
     audioService.playGong(currentStep.gongType);
+    
+    // Set the end time relative to now
+    endTimeRef.current = Date.now() + currentStep.duration * 1000;
+    
     setIsRunning(true);
+
+    return () => {
+      audioService.stopBackgroundMode();
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Timer Logic
+  // Timer Logic with Delta Time (Drift Correction)
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
 
-    if (isRunning && timeLeft > 0 && !isCompleted) {
+    if (isRunning && !isCompleted) {
       interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && !isCompleted) {
-      // Step finished
-      if (currentStepIndex < routine.steps.length - 1) {
-        // Next step
-        const nextIndex = currentStepIndex + 1;
-        setCurrentStepIndex(nextIndex);
-        const next = routine.steps[nextIndex];
-        setTimeLeft(next.duration);
-        audioService.playGong(next.gongType);
-      } else {
-        // Routine finished
-        setIsRunning(false);
-        audioService.playGong(currentStep.gongType); // Final gong
-        setIsCompleted(true); // Trigger Success View
-      }
+        const now = Date.now();
+        const delta = endTimeRef.current - now;
+        
+        // Calculate remaining seconds
+        const remaining = Math.ceil(delta / 1000);
+
+        if (remaining > 0) {
+          setTimeLeft(remaining);
+        } else {
+          // Step Finished
+          if (currentStepIndex < routine.steps.length - 1) {
+            // Move to Next Step
+            const nextIndex = currentStepIndex + 1;
+            const next = routine.steps[nextIndex];
+            
+            setCurrentStepIndex(nextIndex);
+            
+            // Set new Target Time
+            endTimeRef.current = Date.now() + next.duration * 1000;
+            setTimeLeft(next.duration);
+            
+            audioService.playGong(next.gongType);
+          } else {
+            // Routine Finished
+            setIsRunning(false);
+            setTimeLeft(0);
+            audioService.playGong(currentStep.gongType); // Final gong
+            setIsCompleted(true);
+          }
+        }
+      }, 250); // Check 4 times a second for smoother UI updates, though timeLeft updates every second
     }
 
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft, currentStepIndex, routine.steps, currentStep.gongType, isCompleted]);
+  }, [isRunning, currentStepIndex, routine.steps, isCompleted]);
+
+  // Handle Pause/Resume logic with timestamps
+  const togglePause = () => {
+    if (isRunning) {
+      // PAUSING
+      pauseTimeRef.current = Date.now();
+      setIsRunning(false);
+      audioService.stopBackgroundMode();
+    } else {
+      // RESUMING
+      const timePaused = Date.now() - pauseTimeRef.current;
+      endTimeRef.current += timePaused; // Push the end time forward by however long we paused
+      
+      setIsRunning(true);
+      audioService.resume(); // Ensure context is alive and background mode starts
+    }
+  };
+
+  const skipStep = () => {
+    // Force the end time to now to trigger the effect
+    endTimeRef.current = Date.now();
+    setTimeLeft(0); 
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   // D3 Visualization for Progress Circle
   useEffect(() => {
@@ -83,7 +138,9 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
 
     // Progress Arc
     const totalDuration = currentStep.duration;
-    const progress = (totalDuration - timeLeft) / totalDuration;
+    // Ensure we don't divide by zero or get negative numbers
+    const safeTimeLeft = Math.max(0, timeLeft);
+    const progress = (totalDuration - safeTimeLeft) / totalDuration;
     
     const arc = d3.arc()
       .innerRadius(radius - 12)
@@ -98,30 +155,12 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
       
   }, [timeLeft, currentStep.duration, isCompleted]);
 
-  const togglePause = () => {
-    setIsRunning(!isRunning);
-    audioService.resume();
-  };
-
-  const skipStep = () => {
-    setTimeLeft(0); // Triggers useEffect to go next
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
   // --- GEOMETRY GENERATION ---
-  // Generates paths that look like vibrating strings with sharp peaks (non-differentiable points)
   const generateStringWave = (radius: number, peaks: number, amplitude: number) => {
     const points = [];
     const steps = 500; 
     for (let i = 0; i <= steps; i++) {
       const theta = (i / steps) * Math.PI * 2;
-      // Formula: r = R + A * (1 - |sin(k*theta)|)
-      // This creates the "bouncing" wave effect with sharp cusps
       const r = radius + amplitude * (1 - Math.abs(Math.sin(theta * (peaks / 2)))); 
       
       const x = r * Math.cos(theta);
@@ -131,10 +170,8 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
     return `M ${points.join(' L ')} Z`;
   };
 
-  // Memoize geometry to prevent recalculation
   const sacredGeometry = useMemo(() => {
     return {
-      // The sharp wave strings
       stringWave1: generateStringWave(60, 12, 10),
       stringWave2: generateStringWave(60, 8, 15),
       stringWave3: generateStringWave(60, 6, 5),
@@ -146,26 +183,19 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[#fafaf9]">
         
-        {/* 1. BACKGROUND LAYER - Subtle Breathing */}
+        {/* 1. BACKGROUND LAYER */}
         <div className="absolute inset-0 bg-gradient-to-br from-stone-50 via-stone-100 to-orange-50/20 animate-[breathe_8s_ease-in-out_infinite]" />
 
-        {/* 2. ANIMATION LAYER - Expanding from Center */}
-        {/* Centered exactly where the timer was */}
+        {/* 2. ANIMATION LAYER */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <svg className="w-full h-full overflow-visible" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
             <g transform="translate(100, 100)">
-              
-              {/* SUBLIMINAL GEOMETRY (Fixed rotation, subtle) */}
               <g className="opacity-[0.05] animate-[spinSlow_60s_linear_infinite]">
-                 {/* Hexagonal Lattice representation */}
                  <path d="M0 -80 L69 -40 L69 40 L0 80 L-69 40 L-69 -40 Z" fill="none" stroke="currentColor" strokeWidth="1" />
                  <circle r="60" fill="none" stroke="currentColor" strokeWidth="0.5" />
                  <path d="M0 -80 L0 80 M69 -40 L-69 40 M69 40 L-69 -40" stroke="currentColor" strokeWidth="0.5" />
               </g>
 
-              {/* EXPANDING WAVES (The "Strings") */}
-              {/* These start small and expand outward to infinity while fading */}
-              
               {[0, 1, 2, 3].map((i) => (
                 <path 
                   key={i}
@@ -194,36 +224,29 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
           </svg>
         </div>
 
-        {/* 3. STATIC UI LAYER - Fixed Content */}
-        {/* These elements do not move with the waves, providing the anchor */}
+        {/* 3. STATIC UI LAYER */}
         <div className="z-10 flex flex-col items-center justify-center relative">
-           
-           {/* Static Central Icon */}
            <div className="mb-10 p-8 rounded-full bg-white/80 backdrop-blur-sm border border-stone-100 shadow-xl">
              <Check size={48} className="text-stone-800" strokeWidth={2} />
            </div>
-           
-           {/* Static Text */}
            <h1 className="text-6xl md:text-8xl font-serif text-stone-800 tracking-[0.2em] mb-4 font-bold drop-shadow-sm">
              ¡Exito!
            </h1>
-           
            <div className="w-12 h-px bg-stone-400 mb-6"></div>
-
            <p className="text-stone-500 text-sm tracking-[0.4em] uppercase mb-16">
              Routine Complete
            </p>
-
-           {/* Static Button */}
            <button 
-             onClick={onExit}
+             onClick={() => {
+               audioService.stopBackgroundMode();
+               onExit();
+             }}
              className="px-12 py-4 bg-stone-800 text-stone-50 text-lg font-serif rounded hover:bg-stone-700 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 duration-300"
            >
              Finish
            </button>
         </div>
 
-        {/* ANIMATIONS */}
         <style>{`
           @keyframes breathe {
             0%, 100% { opacity: 0.8; }
@@ -262,7 +285,10 @@ const TimerView: React.FC<TimerViewProps> = ({ routine, onExit }) => {
       </div>
 
       <button 
-        onClick={onExit} 
+        onClick={() => {
+          audioService.stopBackgroundMode();
+          onExit();
+        }} 
         className="absolute top-6 right-6 p-2 rounded-full hover:bg-stone-200 transition-colors"
       >
         <X size={24} className="text-stone-600" />

@@ -4,6 +4,9 @@ class AudioService {
   private ctx: AudioContext | null = null;
   private reverbBuffer: AudioBuffer | null = null;
   private pinkNoiseBuffer: AudioBuffer | null = null;
+  
+  // HTML Audio element for the "Keep Alive" silence loop
+  private keepAliveAudio: HTMLAudioElement | null = null;
 
   private getContext(): AudioContext {
     if (!this.ctx) {
@@ -11,6 +14,33 @@ class AudioService {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     return this.ctx;
+  }
+
+  /**
+   * BACKGROUND MODE ENABLER
+   * Plays a silent HTML5 audio loop. 
+   * This forces Android/iOS to treat the app as a "Media Player" (like Spotify),
+   * preventing the OS from killing the process or throttling the timer when the screen is off.
+   */
+  public startBackgroundMode() {
+    if (this.keepAliveAudio) return;
+
+    // A tiny base64 encoded silent MP3
+    const silentMP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjIwLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAASAAAAAAAASHGZXZAAAAAAA//OEZAAAAAAIAAAAAAAAEAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEZAAAAAAIAAAAAAAAEAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+    this.keepAliveAudio = new Audio(silentMP3);
+    this.keepAliveAudio.loop = true;
+    this.keepAliveAudio.volume = 0.01; // Almost silent, but technically "playing"
+    
+    // We must catch errors because browsers block autoplay without interaction
+    this.keepAliveAudio.play().catch(e => console.log("Background audio pending interaction..."));
+  }
+
+  public stopBackgroundMode() {
+    if (this.keepAliveAudio) {
+      this.keepAliveAudio.pause();
+      this.keepAliveAudio = null;
+    }
   }
 
   private getPinkNoiseBuffer(ctx: AudioContext): AudioBuffer {
@@ -497,6 +527,9 @@ class AudioService {
     const ctx = this.getContext();
     const t = ctx.currentTime;
 
+    // Ensure we are in background mode (keep screen/cpu awake logic)
+    this.startBackgroundMode();
+
     // --- OUTPUT LIMITER ---
     // Protects speakers from clipping by soft-clipping high peaks
     const limiter = ctx.createDynamicsCompressor();
@@ -619,6 +652,8 @@ class AudioService {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+    // Also try to start background mode on resume
+    this.startBackgroundMode();
   }
 }
 
